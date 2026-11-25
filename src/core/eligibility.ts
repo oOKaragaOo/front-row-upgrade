@@ -1,19 +1,10 @@
-import type { TicketQueueEntry } from "../types";
+import type {
+  ExcludedEntry,
+  ExclusionReason,
+  TicketQueueEntry,
+} from "../types";
 
-export type ExclusionReason =
-  | "Cancelled entry"
-  | "Already upgraded"
-  | "Invalid event start time"
-  | "Concert already started"
-  | "Blocked fan"
-  | "Invalid ticket value"
-  | "Invalid queue join time"
-  | "Invalid entry id";
-
-export type ExcludedEntry = {
-  entry: TicketQueueEntry;
-  reason: ExclusionReason;
-};
+export type { ExcludedEntry, ExclusionReason } from "../types";
 
 export type EligibilityResult = {
   eligible: TicketQueueEntry[];

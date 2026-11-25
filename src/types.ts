@@ -26,3 +26,25 @@ export type FanGroup = {
   representative: RankedEntry | null;
   connectionReasons: string[];
 };
+
+export type ExclusionReason =
+  | "Cancelled entry"
+  | "Already upgraded"
+  | "Invalid event start time"
+  | "Concert already started"
+  | "Blocked fan"
+  | "Invalid ticket value"
+  | "Invalid queue join time"
+  | "Invalid entry id";
+
+export type ExcludedEntry = {
+  entry: TicketQueueEntry;
+  reason: ExclusionReason;
+};
+
+export type FrontRowUpgradeResult = {
+  winner: RankedEntry | null;
+  topCandidates: RankedEntry[];
+  fanGroups: FanGroup[];
+  excludedEntries: ExcludedEntry[];
+};
