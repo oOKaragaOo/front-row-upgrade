@@ -1,5 +1,6 @@
 import { describe, expect, test } from "@jest/globals";
 import { buildFrontRowUpgradeQueue } from "../src/buildFrontRowUpgradeQueue";
+import { DEFAULT_NOW_ISO, SAMPLE_ENTRIES } from "../src/sampleEntries";
 import type { TicketQueueEntry } from "../src/types";
 
 const now = new Date("2026-06-01T12:00:00.000Z");
@@ -163,6 +164,38 @@ describe("buildFrontRowUpgradeQueue", () => {
 
     expect(normalResult.winner?.entry).toBe(highLoyalty);
     expect(rushResult.winner?.entry).toBe(longWaiting);
+  });
+
+  test("advancing sample time reshuffles candidates near the wait cap", () => {
+    const startTime = new Date(DEFAULT_NOW_ISO);
+    const laterTime = new Date(startTime.getTime() + 45 * 60_000);
+    const hourLaterTime = new Date(startTime.getTime() + 60 * 60_000);
+
+    const startResult = buildFrontRowUpgradeQueue(
+      SAMPLE_ENTRIES,
+      startTime,
+    );
+    const laterResult = buildFrontRowUpgradeQueue(SAMPLE_ENTRIES, laterTime);
+    const hourLaterResult = buildFrontRowUpgradeQueue(
+      SAMPLE_ENTRIES,
+      hourLaterTime,
+    );
+
+    expect(startResult.topCandidates.map(({ entry }) => entry.id)).toEqual([
+      "FR-208",
+      "FR-601",
+      "FR-602",
+    ]);
+    expect(laterResult.topCandidates.map(({ entry }) => entry.id)).toEqual([
+      "FR-208",
+      "FR-602",
+      "FR-603",
+    ]);
+    expect(hourLaterResult.topCandidates.map(({ entry }) => entry.id)).toEqual([
+      "FR-208",
+      "FR-603",
+      "FR-602",
+    ]);
   });
 
   test("does not mutate the input entries or entry objects", () => {

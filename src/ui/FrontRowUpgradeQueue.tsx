@@ -59,6 +59,19 @@ export default function FrontRowUpgradeQueue() {
     );
   }
 
+  function upgradeWinnerTicket() {
+    if (result.winner === null) {
+      return;
+    }
+
+    const winnerId = result.winner.entry.id;
+    setEntries((currentEntries) =>
+      currentEntries.map((entry) =>
+        entry.id === winnerId ? { ...entry, status: "upgraded" } : entry,
+      ),
+    );
+  }
+
   const eligibleCount = result.fanGroups.reduce(
     (total, group) => total + group.entries.length,
     0,
@@ -197,6 +210,16 @@ export default function FrontRowUpgradeQueue() {
                       </span>
                     )}
                   </p>
+                  <button
+                    className="mt-4 rounded-xl bg-[#b9f3df] px-4 py-2.5 text-sm font-bold text-[#145744] transition hover:bg-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                    onClick={upgradeWinnerTicket}
+                    type="button"
+                  >
+                    Upgrade ticket
+                  </button>
+                  <p className="mt-2 text-xs text-slate-300">
+                    Mark this entry upgraded and refresh the queue.
+                  </p>
                   <div className="mt-7">
                     <p className="mb-2 text-xs font-bold uppercase tracking-[0.15em] text-slate-300">
                       Why this fan is next
@@ -260,6 +283,16 @@ export default function FrontRowUpgradeQueue() {
                       <p className="mt-0.5 text-xs text-slate-500">
                         {candidate.entry.id}
                       </p>
+                      <details className="mt-2 text-xs text-slate-600">
+                        <summary className="w-fit cursor-pointer font-semibold text-[#12694f] hover:underline focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#168363]">
+                          Explore score details
+                        </summary>
+                        <ul className="mt-2 space-y-1.5 border-l-2 border-[#b9f3df] pl-3">
+                          {candidate.reasons.map((reason) => (
+                            <li key={reason}>{reason}</li>
+                          ))}
+                        </ul>
+                      </details>
                     </div>
                     <p className="text-sm font-black tabular-nums text-[#12694f]">
                       {formatScore(candidate.score)}
