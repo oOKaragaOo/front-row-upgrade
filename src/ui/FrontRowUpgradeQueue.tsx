@@ -4,7 +4,7 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { buildFrontRowUpgradeQueue } from "../buildFrontRowUpgradeQueue";
 import { DEFAULT_NOW_ISO, SAMPLE_ENTRIES } from "../sampleEntries";
 import type { ScoringMode } from "../core/config";
-import type { TicketQueueEntry } from "../types";
+import type { ExclusionReason, TicketQueueEntry } from "../types";
 
 const MODE_OPTIONS: { value: ScoringMode; label: string }[] = [
   { value: "normal", label: "Normal" },
@@ -44,6 +44,9 @@ export default function FrontRowUpgradeQueue() {
   const [visibleFanGroupCount, setVisibleFanGroupCount] = useState(DISPLAY_BATCH_SIZE);
   const [entrySearch, setEntrySearch] = useState("");
   const [visibleEntryCount, setVisibleEntryCount] = useState(DISPLAY_BATCH_SIZE);
+  const [excludedSearch, setExcludedSearch] = useState("");
+  const [excludedReasonFilter, setExcludedReasonFilter] = useState<ExclusionReason | "all">("all");
+  const [visibleExcludedCount, setVisibleExcludedCount] = useState(DISPLAY_BATCH_SIZE);
 
   const result = useMemo(
     () => buildFrontRowUpgradeQueue(entries, now, mode),
@@ -51,6 +54,7 @@ export default function FrontRowUpgradeQueue() {
   );
   const deferredFanGroupSearch = useDeferredValue(fanGroupSearch.trim().toLocaleLowerCase());
   const deferredEntrySearch = useDeferredValue(entrySearch.trim().toLocaleLowerCase());
+  const deferredExcludedSearch = useDeferredValue(excludedSearch.trim().toLocaleLowerCase());
   const filteredFanGroups = useMemo(() => {
     if (deferredFanGroupSearch === "") {
       return result.fanGroups;
@@ -77,6 +81,23 @@ export default function FrontRowUpgradeQueue() {
       entry.id.toLocaleLowerCase().includes(deferredEntrySearch),
     );
   }, [deferredEntrySearch, entries]);
+  const excludedReasons = useMemo(
+    () => Array.from(new Set(result.excludedEntries.map(({ reason }) => reason))).sort(),
+    [result.excludedEntries],
+  );
+  const activeExcludedReasonFilter = excludedReasonFilter !== "all" &&
+    excludedReasons.includes(excludedReasonFilter)
+    ? excludedReasonFilter
+    : "all";
+  const filteredExcludedEntries = useMemo(() =>
+    result.excludedEntries.filter(({ entry, reason }) =>
+      (activeExcludedReasonFilter === "all" || reason === activeExcludedReasonFilter) &&
+      (deferredExcludedSearch === "" ||
+        entry.fanName.toLocaleLowerCase().includes(deferredExcludedSearch) ||
+        entry.id.toLocaleLowerCase().includes(deferredExcludedSearch) ||
+        reason.toLocaleLowerCase().includes(deferredExcludedSearch)),
+    ),
+  [activeExcludedReasonFilter, deferredExcludedSearch, result.excludedEntries]);
 
   function moveTimeForward(minutes: number) {
     setNow((currentTime) => new Date(currentTime.getTime() + minutes * 60_000));
@@ -497,26 +518,77 @@ export default function FrontRowUpgradeQueue() {
                 <h2 className="mt-1 text-xl font-black">Excluded entries</h2>
               </div>
               <span className="text-xs font-medium text-slate-500">
-                {result.excludedEntries.length} entries
+                {filteredExcludedEntries.length} of {result.excludedEntries.length} entries
               </span>
             </div>
             {result.excludedEntries.length > 0 ? (
-              <ul className="space-y-2">
-                {result.excludedEntries.map(({ entry, reason }) => (
-                  <li
-                    className="flex items-start justify-between gap-3 rounded-xl bg-rose-50/70 px-3 py-2.5"
-                    key={entry.id}
+              <>
+                <div className="mb-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                  <label>
+                    <span className="sr-only">Search excluded entries by fan name, ID, or reason</span>
+                    <input
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100"
+                      onChange={(event) => {
+                        setExcludedSearch(event.target.value);
+                        setVisibleExcludedCount(DISPLAY_BATCH_SIZE);
+                      }}
+                      placeholder="Search name, ID, or reason"
+                      type="search"
+                      value={excludedSearch}
+                    />
+                  </label>
+                  <label className="sm:min-w-52">
+                    <span className="sr-only">Filter excluded entries by reason</span>
+                    <select
+                      className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100"
+                      onChange={(event) => {
+                        setExcludedReasonFilter(event.target.value as ExclusionReason | "all");
+                        setVisibleExcludedCount(DISPLAY_BATCH_SIZE);
+                      }}
+                      value={activeExcludedReasonFilter}
+                    >
+                      <option value="all">All exclusion reasons</option>
+                      {excludedReasons.map((reason) => (
+                        <option key={reason} value={reason}>{reason}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <p aria-live="polite" className="mb-2 text-xs text-slate-500">
+                  Showing {Math.min(visibleExcludedCount, filteredExcludedEntries.length)} of {filteredExcludedEntries.length} matching entries
+                </p>
+                <div className="max-h-[32rem] space-y-2 overflow-y-auto overscroll-contain pr-2">
+                  {filteredExcludedEntries.length > 0 ? (
+                    filteredExcludedEntries.slice(0, visibleExcludedCount).map(({ entry, reason }) => (
+                      <div
+                        className="flex items-start justify-between gap-3 rounded-xl bg-rose-50/70 px-3 py-2.5"
+                        key={entry.id}
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-800">{entry.fanName}</p>
+                          <p className="truncate text-xs text-slate-500">{entry.id}</p>
+                        </div>
+                        <span className="shrink-0 text-right text-xs font-semibold text-rose-700">
+                          {reason}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
+                      No excluded entries match these filters.
+                    </p>
+                  )}
+                </div>
+                {visibleExcludedCount < filteredExcludedEntries.length && (
+                  <button
+                    className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:border-rose-500 hover:text-rose-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500"
+                    onClick={() => setVisibleExcludedCount((count) => count + DISPLAY_BATCH_SIZE)}
+                    type="button"
                   >
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">{entry.fanName}</p>
-                      <p className="text-xs text-slate-500">{entry.id}</p>
-                    </div>
-                    <span className="text-right text-xs font-semibold text-rose-700">
-                      {reason}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+                    Show {Math.min(DISPLAY_BATCH_SIZE, filteredExcludedEntries.length - visibleExcludedCount)} more entries
+                  </button>
+                )}
+              </>
             ) : (
               <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
                 No entries are excluded.
