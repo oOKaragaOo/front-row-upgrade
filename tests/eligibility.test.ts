@@ -69,6 +69,20 @@ describe("filterEligibleEntries", () => {
     ]);
   });
 
+  test("excludes an entry when the queue join time is invalid", () => {
+    const entry = createEntry({ joinedQueueAt: "not-a-date" });
+
+    expect(filterEligibleEntries([entry], now).excludedEntries).toEqual([
+      { entry, reason: "Invalid queue join time" },
+    ]);
+  });
+
+  test("keeps an entry with a future queue join time eligible", () => {
+    const entry = createEntry({ joinedQueueAt: "2026-06-01T13:00:00.000Z" });
+
+    expect(filterEligibleEntries([entry], now).eligible).toEqual([entry]);
+  });
+
   test("excludes a blocked fan", () => {
     const entry = createEntry({ membership: "blocked" });
 

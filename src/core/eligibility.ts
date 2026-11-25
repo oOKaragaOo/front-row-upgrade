@@ -6,7 +6,8 @@ export type ExclusionReason =
   | "Invalid event start time"
   | "Concert already started"
   | "Blocked fan"
-  | "Invalid ticket value";
+  | "Invalid ticket value"
+  | "Invalid queue join time";
 
 export type ExcludedEntry = {
   entry: TicketQueueEntry;
@@ -45,6 +46,10 @@ function getExclusionReason(
 
   if (!hasValidTicketValue(entry.ticketValue)) {
     return "Invalid ticket value";
+  }
+
+  if (Number.isNaN(new Date(entry.joinedQueueAt).getTime())) {
+    return "Invalid queue join time";
   }
 
   return null;
