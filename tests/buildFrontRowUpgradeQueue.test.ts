@@ -146,6 +146,25 @@ describe("buildFrontRowUpgradeQueue", () => {
     expect(secondResult).toEqual(firstResult);
   });
 
+  test("changes the winner when Rush Hour gives waiting time more weight", () => {
+    const longWaiting = createEntry("entry-waiting", {
+      joinedQueueAt: "2026-06-01T08:00:00.000Z",
+      upgradesLast30Days: 5,
+    });
+    const highLoyalty = createEntry("entry-loyalty", {
+      loyaltyPoints: 1_000,
+      joinedQueueAt: now.toISOString(),
+      upgradesLast30Days: 0,
+    });
+    const entries = [longWaiting, highLoyalty];
+
+    const normalResult = buildFrontRowUpgradeQueue(entries, now);
+    const rushResult = buildFrontRowUpgradeQueue(entries, now, "rushHour");
+
+    expect(normalResult.winner?.entry).toBe(highLoyalty);
+    expect(rushResult.winner?.entry).toBe(longWaiting);
+  });
+
   test("does not mutate the input entries or entry objects", () => {
     const entries = [
       createEntry("entry-a", { phoneNumber: "0812345678" }),

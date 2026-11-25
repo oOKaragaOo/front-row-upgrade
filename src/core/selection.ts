@@ -1,4 +1,5 @@
 import { scoreEntry } from "./scoring";
+import type { ScoringMode } from "./config";
 import type { FanGroup, RankedEntry } from "../types";
 
 export type SelectionResult = {
@@ -61,7 +62,11 @@ function addTopCandidate(
   }
 }
 
-export function selectWinners(fanGroups: FanGroup[], now: Date): SelectionResult {
+export function selectWinners(
+  fanGroups: FanGroup[],
+  now: Date,
+  mode: ScoringMode = "normal",
+): SelectionResult {
   const rankedGroups: FanGroup[] = [];
   const topCandidates: RankedEntry[] = [];
 
@@ -69,7 +74,7 @@ export function selectWinners(fanGroups: FanGroup[], now: Date): SelectionResult
     let representative: RankedEntry | null = null;
 
     for (const entry of fanGroup.entries) {
-      const rankedEntry = scoreEntry(entry, now);
+      const rankedEntry = scoreEntry(entry, now, mode);
 
       if (
         representative === null ||

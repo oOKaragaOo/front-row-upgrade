@@ -1,8 +1,9 @@
 import {
   LOYALTY_POINTS_CAP,
-  NORMAL_WEIGHTS,
+  SCORING_WEIGHTS,
   TICKET_VALUE_CAP,
   WAIT_MINUTES_CAP,
+  type ScoringMode,
 } from "./config";
 import type { RankedEntry, TicketQueueEntry } from "../types";
 
@@ -13,6 +14,7 @@ function getScorePoints(factor: number, weight: number, totalWeight: number): nu
 export function scoreEntry(
   entry: TicketQueueEntry,
   now: Date,
+  mode: ScoringMode = "normal",
 ): RankedEntry {
   const loyaltyPoints = Math.max(entry.loyaltyPoints ?? 0, 0);
   const loyaltyFactor = Math.min(loyaltyPoints, LOYALTY_POINTS_CAP) / LOYALTY_POINTS_CAP;
@@ -31,33 +33,34 @@ export function scoreEntry(
   const upgradesLast30Days = Math.max(entry.upgradesLast30Days ?? 0, 0);
   const recentUpgradesFactor = Math.pow(2, -upgradesLast30Days);
 
-  const totalWeight = Object.values(NORMAL_WEIGHTS).reduce(
+  const weights = SCORING_WEIGHTS[mode];
+  const totalWeight = Object.values(weights).reduce(
     (total, weight) => total + weight,
     0,
   );
   const loyaltyPointsEarned = getScorePoints(
     loyaltyFactor,
-    NORMAL_WEIGHTS.loyalty,
+    weights.loyalty,
     totalWeight,
   );
   const waitingPointsEarned = getScorePoints(
     waitingFactor,
-    NORMAL_WEIGHTS.waiting,
+    weights.waiting,
     totalWeight,
   );
   const ticketPointsEarned = getScorePoints(
     ticketFactor,
-    NORMAL_WEIGHTS.ticket,
+    weights.ticket,
     totalWeight,
   );
   const vipPointsEarned = getScorePoints(
     vipFactor,
-    NORMAL_WEIGHTS.vip,
+    weights.vip,
     totalWeight,
   );
   const recentUpgradesPointsEarned = getScorePoints(
     recentUpgradesFactor,
-    NORMAL_WEIGHTS.recentUpgrades,
+    weights.recentUpgrades,
     totalWeight,
   );
 
