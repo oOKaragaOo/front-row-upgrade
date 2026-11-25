@@ -35,6 +35,9 @@ export default function FrontRowUpgradeQueue() {
   );
   const [now, setNow] = useState(() => new Date(DEFAULT_NOW_ISO));
   const [mode, setMode] = useState<ScoringMode>("normal");
+  const [activeLoyaltyActions, setActiveLoyaltyActions] = useState<string | null>(null);
+  const [editingLoyaltyEntryId, setEditingLoyaltyEntryId] = useState<string | null>(null);
+  const [draftLoyaltyPoints, setDraftLoyaltyPoints] = useState("");
 
   const result = useMemo(
     () => buildFrontRowUpgradeQueue(entries, now, mode),
@@ -45,11 +48,11 @@ export default function FrontRowUpgradeQueue() {
     setNow((currentTime) => new Date(currentTime.getTime() + minutes * 60_000));
   }
 
-  function changeLoyaltyPoints(entryId: string, value: string) {
+  function changeLoyaltyPoints(entryId: string, value: string): boolean {
     const loyaltyPoints = value.trim() === "" ? null : Number(value);
 
     if (loyaltyPoints !== null && !Number.isFinite(loyaltyPoints)) {
-      return;
+      return false;
     }
 
     setEntries((currentEntries) =>
@@ -57,6 +60,37 @@ export default function FrontRowUpgradeQueue() {
         entry.id === entryId ? { ...entry, loyaltyPoints } : entry,
       ),
     );
+
+    return true;
+  }
+
+  function beginLoyaltyEdit(entry: TicketQueueEntry, reset: boolean) {
+    const originalEntry = SAMPLE_ENTRIES.find(
+      (sampleEntry) => sampleEntry.id === entry.id,
+    );
+    const points = reset
+      ? originalEntry?.loyaltyPoints
+      : entry.loyaltyPoints;
+
+    setDraftLoyaltyPoints(points == null ? "" : String(points));
+    setEditingLoyaltyEntryId(entry.id);
+    setActiveLoyaltyActions(null);
+  }
+
+  function confirmLoyaltyEdit() {
+    if (editingLoyaltyEntryId === null) {
+      return;
+    }
+
+    if (changeLoyaltyPoints(editingLoyaltyEntryId, draftLoyaltyPoints)) {
+      setEditingLoyaltyEntryId(null);
+      setDraftLoyaltyPoints("");
+    }
+  }
+
+  function cancelLoyaltyEdit() {
+    setEditingLoyaltyEntryId(null);
+    setDraftLoyaltyPoints("");
   }
 
   function upgradeWinnerTicket() {
@@ -412,8 +446,8 @@ export default function FrontRowUpgradeQueue() {
                 Live adjustment
               </p>
               <h2 className="mt-1 text-xl font-black">Loyalty points</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Edit a fan&apos;s points to see the queue recalculate.
+              <p className="mt-1 text-sm text-slate-500" id="loyalty-points-help">
+                Select a value, choose Edit or Reset, then confirm to update the queue.
               </p>
             </div>
             <span className="text-xs font-medium text-slate-500">
@@ -440,17 +474,77 @@ export default function FrontRowUpgradeQueue() {
                       <label className="sr-only" htmlFor={`loyalty-${entry.id}`}>
                         Loyalty points for {entry.fanName}
                       </label>
-                      <input
-                        className="w-28 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-right text-sm font-semibold tabular-nums text-slate-800 focus:border-[#168363] focus:outline-none focus:ring-2 focus:ring-[#b9f3df]"
-                        id={`loyalty-${entry.id}`}
-                        min="0"
-                        onChange={(event) =>
-                          changeLoyaltyPoints(entry.id, event.target.value)
-                        }
-                        step="1"
-                        type="number"
-                        value={entry.loyaltyPoints ?? ""}
-                      />
+                      <div className="flex flex-col items-end gap-1.5">
+                        <input
+                          aria-describedby="loyalty-points-help"
+                          className={`w-28 rounded-lg border px-2.5 py-1.5 text-right text-sm font-semibold tabular-nums focus:border-[#168363] focus:outline-none focus:ring-2 focus:ring-[#b9f3df] ${
+                            editingLoyaltyEntryId === entry.id
+                              ? "border-[#168363] bg-white text-slate-800"
+                              : "cursor-pointer border-slate-200 bg-slate-100 text-slate-500"
+                          }`}
+                          id={`loyalty-${entry.id}`}
+                          min="0"
+                          onChange={(event) =>
+                            setDraftLoyaltyPoints(event.target.value)
+                          }
+                          onClick={() => {
+                            if (editingLoyaltyEntryId === null) {
+                              setActiveLoyaltyActions(entry.id);
+                            }
+                          }}
+                          onFocus={() => {
+                            if (editingLoyaltyEntryId === null) {
+                              setActiveLoyaltyActions(entry.id);
+                            }
+                          }}
+                          readOnly={editingLoyaltyEntryId !== entry.id}
+                          step="1"
+                          type="number"
+                          value={
+                            editingLoyaltyEntryId === entry.id
+                              ? draftLoyaltyPoints
+                              : entry.loyaltyPoints ?? ""
+                          }
+                        />
+                        {editingLoyaltyEntryId === entry.id ? (
+                          <div className="flex gap-1.5">
+                            <button
+                              className="rounded-lg bg-[#168363] px-2.5 py-1 text-xs font-bold text-white hover:bg-[#12694f] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#168363]"
+                              onClick={confirmLoyaltyEdit}
+                              type="button"
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#168363]"
+                              onClick={cancelLoyaltyEdit}
+                              type="button"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : activeLoyaltyActions === entry.id ? (
+                          <div
+                            className="flex gap-1.5"
+                            id={`loyalty-actions-${entry.id}`}
+                          >
+                            <button
+                              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-[#168363] hover:text-[#12694f] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#168363]"
+                              onClick={() => beginLoyaltyEdit(entry, false)}
+                              type="button"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-[#168363] hover:text-[#12694f] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#168363]"
+                              onClick={() => beginLoyaltyEdit(entry, true)}
+                              type="button"
+                            >
+                              Reset
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
