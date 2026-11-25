@@ -83,6 +83,25 @@ describe("filterEligibleEntries", () => {
     expect(filterEligibleEntries([entry], now).eligible).toEqual([entry]);
   });
 
+  test("excludes an entry without an id", () => {
+    const entry = createEntry({ id: "" });
+
+    expect(filterEligibleEntries([entry], now).excludedEntries).toEqual([
+      { entry, reason: "Invalid entry id" },
+    ]);
+  });
+
+  test("excludes an entry when the id property is missing", () => {
+    const entry = {
+      ...createEntry(),
+      id: undefined,
+    } as unknown as TicketQueueEntry;
+
+    expect(filterEligibleEntries([entry], now).excludedEntries).toEqual([
+      { entry, reason: "Invalid entry id" },
+    ]);
+  });
+
   test("excludes a blocked fan", () => {
     const entry = createEntry({ membership: "blocked" });
 
