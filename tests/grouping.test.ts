@@ -33,6 +33,18 @@ describe("groupEligibleEntries", () => {
     ]);
   });
 
+  test("lists a shared connection reason only once per group", () => {
+    const entries = [
+      createEntry("a", { phoneNumber: "0812345678" }),
+      createEntry("b", { phoneNumber: "0812345678" }),
+      createEntry("c", { phoneNumber: "0812345678" }),
+    ];
+
+    expect(groupEligibleEntries(entries)[0].connectionReasons).toEqual([
+      "Shared phone number",
+    ]);
+  });
+
   test("joins indirect phone and device connections in one group", () => {
     const firstEntry = createEntry("a", { phoneNumber: "0812345678" });
     const secondEntry = createEntry("b", {

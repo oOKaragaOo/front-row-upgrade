@@ -1,15 +1,9 @@
 import { normalizeIdentifier, normalizePhoneNumber } from "./normalize";
 import type { FanGroup, TicketQueueEntry } from "../types";
 
-type ConnectionReason =
-  | "Shared phone number"
-  | "Shared device ID"
-  | "Shared payment account";
-
-type Connection = {
-  entryIndex: number;
-  reason: ConnectionReason;
-};
+const PHONE_CONNECTION_FLAG = 1;
+const DEVICE_CONNECTION_FLAG = 2;
+const PAYMENT_ACCOUNT_CONNECTION_FLAG = 4;
 
 function findRoot(parent: number[], entryIndex: number): number {
   let root = entryIndex;
@@ -47,10 +41,10 @@ function connectByValue(
   valueToEntryIndex: Map<string, number>,
   value: string | null,
   entryIndex: number,
-  reason: ConnectionReason,
+  reasonFlag: number,
   parent: number[],
   groupSize: number[],
-  connections: Connection[],
+  reasonFlags: Uint8Array,
 ): void {
   if (value === null) {
     return;
@@ -63,7 +57,7 @@ function connectByValue(
   }
 
   union(parent, groupSize, firstEntryIndex, entryIndex);
-  connections.push({ entryIndex, reason });
+  reasonFlags[entryIndex] |= reasonFlag;
 }
 
 export function groupEligibleEntries(
@@ -74,7 +68,7 @@ export function groupEligibleEntries(
   const phoneToEntryIndex = new Map<string, number>();
   const deviceToEntryIndex = new Map<string, number>();
   const paymentToEntryIndex = new Map<string, number>();
-  const connections: Connection[] = [];
+  const reasonFlags = new Uint8Array(entries.length);
 
   for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
     const entry = entries[entryIndex];
@@ -83,34 +77,35 @@ export function groupEligibleEntries(
       phoneToEntryIndex,
       normalizePhoneNumber(entry.phoneNumber),
       entryIndex,
-      "Shared phone number",
+      PHONE_CONNECTION_FLAG,
       parent,
       groupSize,
-      connections,
+      reasonFlags,
     );
     connectByValue(
       deviceToEntryIndex,
       normalizeIdentifier(entry.deviceId),
       entryIndex,
-      "Shared device ID",
+      DEVICE_CONNECTION_FLAG,
       parent,
       groupSize,
-      connections,
+      reasonFlags,
     );
     connectByValue(
       paymentToEntryIndex,
       normalizeIdentifier(entry.paymentAccount),
       entryIndex,
-      "Shared payment account",
+      PAYMENT_ACCOUNT_CONNECTION_FLAG,
       parent,
       groupSize,
-      connections,
+      reasonFlags,
     );
   }
 
   const groupsByRoot = new Map<number, FanGroup>();
   for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
     const root = findRoot(parent, entryIndex);
+    reasonFlags[root] |= reasonFlags[entryIndex];
     let group = groupsByRoot.get(root);
 
     if (group === undefined) {
@@ -126,23 +121,17 @@ export function groupEligibleEntries(
     group.entries.push(entries[entryIndex]);
   }
 
-  const reasonsByRoot = new Map<number, Set<ConnectionReason>>();
-  for (const connection of connections) {
-    const root = findRoot(parent, connection.entryIndex);
-    let reasons = reasonsByRoot.get(root);
-
-    if (reasons === undefined) {
-      reasons = new Set<ConnectionReason>();
-      reasonsByRoot.set(root, reasons);
+  for (const [root, group] of groupsByRoot) {
+    if ((reasonFlags[root] & PHONE_CONNECTION_FLAG) !== 0) {
+      group.connectionReasons.push("Shared phone number");
     }
 
-    reasons.add(connection.reason);
-  }
+    if ((reasonFlags[root] & DEVICE_CONNECTION_FLAG) !== 0) {
+      group.connectionReasons.push("Shared device ID");
+    }
 
-  for (const [root, reasons] of reasonsByRoot) {
-    const group = groupsByRoot.get(root);
-    if (group !== undefined) {
-      group.connectionReasons.push(...reasons);
+    if ((reasonFlags[root] & PAYMENT_ACCOUNT_CONNECTION_FLAG) !== 0) {
+      group.connectionReasons.push("Shared payment account");
     }
   }
 
