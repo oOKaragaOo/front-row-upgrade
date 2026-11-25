@@ -13,3 +13,19 @@ export function normalizePhoneNumber(
 
   return digits;
 }
+
+export function normalizeIdentifier(
+  identifier: string | null | undefined,
+): string | null {
+  if (identifier == null) {
+    return null;
+  }
+
+  const normalizedIdentifier = identifier.trim();
+
+  if (normalizedIdentifier.length === 0) {
+    return null;
+  }
+
+  return normalizedIdentifier;
+}

@@ -13,3 +13,16 @@ export type TicketQueueEntry = {
   deviceId?: string | null;
   paymentAccount?: string | null;
 };
+
+export type RankedEntry = {
+  entry: TicketQueueEntry;
+  score: number;
+  reasons: string[];
+};
+
+export type FanGroup = {
+  id: string;
+  entries: TicketQueueEntry[];
+  representative: RankedEntry | null;
+  connectionReasons: string[];
+};
