@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { buildFrontRowUpgradeQueue } from "../buildFrontRowUpgradeQueue";
 import { DEFAULT_NOW_ISO, SAMPLE_ENTRIES } from "../sampleEntries";
 import type { ScoringMode } from "../core/config";
@@ -12,6 +12,8 @@ const MODE_OPTIONS: { value: ScoringMode; label: string }[] = [
   { value: "vipHour", label: "VIP Hour" },
   { value: "fairQueue", label: "Fair Queue Mode" },
 ];
+const DISPLAY_BATCH_SIZE = 100;
+const GROUP_MEMBER_DISPLAY_LIMIT = 50;
 
 function formatTime(date: Date): string {
   return new Intl.DateTimeFormat("en", {
@@ -38,11 +40,43 @@ export default function FrontRowUpgradeQueue() {
   const [activeLoyaltyActions, setActiveLoyaltyActions] = useState<string | null>(null);
   const [editingLoyaltyEntryId, setEditingLoyaltyEntryId] = useState<string | null>(null);
   const [draftLoyaltyPoints, setDraftLoyaltyPoints] = useState("");
+  const [fanGroupSearch, setFanGroupSearch] = useState("");
+  const [visibleFanGroupCount, setVisibleFanGroupCount] = useState(DISPLAY_BATCH_SIZE);
+  const [entrySearch, setEntrySearch] = useState("");
+  const [visibleEntryCount, setVisibleEntryCount] = useState(DISPLAY_BATCH_SIZE);
 
   const result = useMemo(
     () => buildFrontRowUpgradeQueue(entries, now, mode),
     [entries, now, mode],
   );
+  const deferredFanGroupSearch = useDeferredValue(fanGroupSearch.trim().toLocaleLowerCase());
+  const deferredEntrySearch = useDeferredValue(entrySearch.trim().toLocaleLowerCase());
+  const filteredFanGroups = useMemo(() => {
+    if (deferredFanGroupSearch === "") {
+      return result.fanGroups;
+    }
+
+    return result.fanGroups.filter((group) =>
+      group.id.toLocaleLowerCase().includes(deferredFanGroupSearch) ||
+      group.connectionReasons.some((reason) =>
+        reason.toLocaleLowerCase().includes(deferredFanGroupSearch),
+      ) ||
+      group.entries.some((entry) =>
+        entry.fanName.toLocaleLowerCase().includes(deferredFanGroupSearch) ||
+        entry.id.toLocaleLowerCase().includes(deferredFanGroupSearch),
+      ),
+    );
+  }, [deferredFanGroupSearch, result.fanGroups]);
+  const filteredEntries = useMemo(() => {
+    if (deferredEntrySearch === "") {
+      return entries;
+    }
+
+    return entries.filter((entry) =>
+      entry.fanName.toLocaleLowerCase().includes(deferredEntrySearch) ||
+      entry.id.toLocaleLowerCase().includes(deferredEntrySearch),
+    );
+  }, [deferredEntrySearch, entries]);
 
   function moveTimeForward(minutes: number) {
     setNow((currentTime) => new Date(currentTime.getTime() + minutes * 60_000));
@@ -355,51 +389,103 @@ export default function FrontRowUpgradeQueue() {
                 {eligibleCount} eligible entries
               </span>
             </div>
-            <div className="space-y-3">
-              {result.fanGroups.map((group, index) => (
-                <article
-                  className="rounded-2xl border border-slate-100 p-4"
-                  key={group.id}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-sm font-bold text-slate-900">
-                      Fan group {index + 1}
-                      <span className="ml-2 text-xs font-medium text-slate-500">
-                        {group.entries.length} {group.entries.length === 1 ? "account" : "accounts"}
-                      </span>
-                    </p>
-                    {group.representative && (
-                      <p className="text-xs font-semibold text-[#12694f]">
-                        Representative: {group.representative.entry.fanName} · {formatScore(group.representative.score)}
-                      </p>
-                    )}
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {group.connectionReasons.length > 0 ? (
-                      group.connectionReasons.map((reason) => (
-                        <span
-                          className="rounded-full bg-[#e7f8f1] px-2.5 py-1 text-xs font-semibold text-[#12694f]"
-                          key={reason}
-                        >
-                          {reason}
-                        </span>
-                      ))
-                    ) : (
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">
-                        No shared identifiers
-                      </span>
-                    )}
-                  </div>
-                  <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
-                    {group.entries.map((entry) => (
-                      <li key={entry.id}>
-                        {entry.fanName} <span className="text-slate-400">({entry.id})</span>
-                      </li>
-                    ))}
-                  </ul>
-                </article>
-              ))}
+            <label className="mb-2 block">
+              <span className="sr-only">Search fan groups by name, entry ID, or connection</span>
+              <input
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-[#168363] focus:outline-none focus:ring-2 focus:ring-[#b9f3df]"
+                onChange={(event) => {
+                  setFanGroupSearch(event.target.value);
+                  setVisibleFanGroupCount(DISPLAY_BATCH_SIZE);
+                }}
+                placeholder="Search fan groups, names, IDs, or connections"
+                type="search"
+                value={fanGroupSearch}
+              />
+            </label>
+            <p aria-live="polite" className="mb-2 text-xs text-slate-500">
+              Showing {Math.min(visibleFanGroupCount, filteredFanGroups.length)} of {filteredFanGroups.length} matching groups
+            </p>
+            <div className="max-h-[36rem] space-y-3 overflow-y-auto overscroll-contain pr-2">
+              {filteredFanGroups.length > 0 ? (
+                filteredFanGroups.slice(0, visibleFanGroupCount).map((group) => {
+                  const matchingMembers = deferredFanGroupSearch
+                    ? group.entries.filter((entry) =>
+                        entry.fanName.toLocaleLowerCase().includes(deferredFanGroupSearch) ||
+                        entry.id.toLocaleLowerCase().includes(deferredFanGroupSearch),
+                      )
+                    : group.entries;
+                  const visibleMembers = matchingMembers.slice(0, GROUP_MEMBER_DISPLAY_LIMIT);
+
+                  return (
+                    <article
+                      className="rounded-2xl border border-slate-100 p-4"
+                      key={group.id}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-bold text-slate-900">
+                          Fan group {group.id.replace("fan-group-", "")}
+                          <span className="ml-2 text-xs font-medium text-slate-500">
+                            {group.entries.length} {group.entries.length === 1 ? "account" : "accounts"}
+                          </span>
+                        </p>
+                        {group.representative && (
+                          <p className="text-xs font-semibold text-[#12694f]">
+                            Representative: {group.representative.entry.fanName} · {formatScore(group.representative.score)}
+                          </p>
+                        )}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {group.connectionReasons.length > 0 ? (
+                          group.connectionReasons.map((reason) => (
+                            <span
+                              className="rounded-full bg-[#e7f8f1] px-2.5 py-1 text-xs font-semibold text-[#12694f]"
+                              key={reason}
+                            >
+                              {reason}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">
+                            No shared identifiers
+                          </span>
+                        )}
+                      </div>
+                      {visibleMembers.length > 0 ? (
+                        <ul className="mt-3 max-h-36 space-y-1 overflow-y-auto pr-1 text-xs text-slate-600">
+                          {visibleMembers.map((entry) => (
+                            <li key={entry.id}>
+                              {entry.fanName} <span className="text-slate-400">({entry.id})</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-3 text-xs text-slate-500">
+                          No member names or IDs match this search.
+                        </p>
+                      )}
+                      {matchingMembers.length > visibleMembers.length && (
+                        <p className="mt-2 text-xs text-slate-500">
+                          Showing {visibleMembers.length} of {matchingMembers.length} matching members. Search to narrow the list.
+                        </p>
+                      )}
+                    </article>
+                  );
+                })
+              ) : (
+                <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
+                  No fan groups match this search.
+                </p>
+              )}
             </div>
+            {visibleFanGroupCount < filteredFanGroups.length && (
+              <button
+                className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:border-[#168363] hover:text-[#12694f] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#168363]"
+                onClick={() => setVisibleFanGroupCount((count) => count + DISPLAY_BATCH_SIZE)}
+                type="button"
+              >
+                Show {Math.min(DISPLAY_BATCH_SIZE, filteredFanGroups.length - visibleFanGroupCount)} more groups
+              </button>
+            )}
           </section>
 
           <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -454,9 +540,25 @@ export default function FrontRowUpgradeQueue() {
               {entries.length} sample entries
             </span>
           </div>
-          <div className="overflow-x-auto">
+          <label className="mb-2 block">
+            <span className="sr-only">Search entries by fan name or entry ID</span>
+            <input
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-[#168363] focus:outline-none focus:ring-2 focus:ring-[#b9f3df]"
+              onChange={(event) => {
+                setEntrySearch(event.target.value);
+                setVisibleEntryCount(DISPLAY_BATCH_SIZE);
+              }}
+              placeholder="Search entries by fan name or ID"
+              type="search"
+              value={entrySearch}
+            />
+          </label>
+          <p aria-live="polite" className="mb-2 text-xs text-slate-500">
+            Showing {Math.min(visibleEntryCount, filteredEntries.length)} of {filteredEntries.length} matching entries
+          </p>
+          <div className="max-h-[32rem] overflow-auto overscroll-contain">
             <table className="w-full min-w-[520px] border-collapse text-left">
-              <thead>
+              <thead className="sticky top-0 z-10 bg-white">
                 <tr className="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-500">
                   <th className="pb-3 pr-4 font-bold">Fan</th>
                   <th className="pb-3 pr-4 font-bold">Entry</th>
@@ -464,7 +566,7 @@ export default function FrontRowUpgradeQueue() {
                 </tr>
               </thead>
               <tbody>
-                {entries.map((entry) => (
+                {filteredEntries.length > 0 ? filteredEntries.slice(0, visibleEntryCount).map((entry) => (
                   <tr className="border-b border-slate-50 last:border-0" key={entry.id}>
                     <td className="py-2.5 pr-4 text-sm font-semibold text-slate-800">
                       {entry.fanName}
@@ -547,9 +649,24 @@ export default function FrontRowUpgradeQueue() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                )) : (
+                  <tr>
+                    <td className="py-4 text-sm text-slate-500" colSpan={3}>
+                      No entries match this search.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
+            {visibleEntryCount < filteredEntries.length && (
+              <button
+                className="my-3 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:border-[#168363] hover:text-[#12694f] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#168363]"
+                onClick={() => setVisibleEntryCount((count) => count + DISPLAY_BATCH_SIZE)}
+                type="button"
+              >
+                Show {Math.min(DISPLAY_BATCH_SIZE, filteredEntries.length - visibleEntryCount)} more entries
+              </button>
+            )}
           </div>
         </section>
 
